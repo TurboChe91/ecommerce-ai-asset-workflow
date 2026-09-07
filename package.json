@@ -8,12 +8,11 @@
     "predeploy": "node scripts/check-production-config.mjs && npm run check",
     "deploy": "wrangler deploy",
     "cf-typegen": "wrangler types",
-    "check:types": "wrangler types --check",
     "lint:frontend": "node --check public/app.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run lint:frontend && npm run typecheck && npm test && npm run check:types"
+    "check": "npm run lint:frontend && npm run cf-typegen && npm run typecheck && npm test"
   },
   "engines": {
     "node": ">=22"
