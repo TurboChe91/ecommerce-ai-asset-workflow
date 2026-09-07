@@ -1,0 +1,31 @@
+{
+  "name": "ecommerce-ai-asset-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --var DEV_AUTH_EMAIL:local-operator@example.com",
+    "predeploy": "node scripts/check-production-config.mjs && npm run check",
+    "deploy": "wrangler deploy",
+    "cf-typegen": "wrangler types",
+    "check:types": "wrangler types --check",
+    "lint:frontend": "node --check public/app.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run lint:frontend && npm run typecheck && npm test && npm run check:types"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "jose": "^6.2.12"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@types/node": "^26.4.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.129.0"
+  }
+}

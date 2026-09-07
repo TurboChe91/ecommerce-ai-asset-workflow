@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#f4f0e9" />
+    <title>AI Commerce Asset Ops</title>
+    <link rel="stylesheet" href="/app.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <header class="brand">
+          <span class="brand-mark" aria-hidden="true">AO</span>
+          <div>
+            <p class="eyebrow">Operations prototype</p>
+            <h1>AI Asset Ops</h1>
+          </div>
+        </header>
+
+        <div class="operator">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span id="operator-email">正在验证身份…</span>
+        </div>
+
+        <div class="sidebar-actions">
+          <button class="button button-primary button-full" id="new-style-button" type="button">
+            <span aria-hidden="true">＋</span> 新建款式
+          </button>
+          <label class="search-field">
+            <span class="sr-only">搜索款式</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.4-4.4m2.4-5.1a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" /></svg>
+            <input id="style-search" type="search" placeholder="搜索编号或名称" autocomplete="off" />
+          </label>
+        </div>
+
+        <div class="style-list-heading">
+          <span>款式</span>
+          <span id="style-total">0</span>
+        </div>
+        <nav class="style-list" id="style-list" aria-label="款式列表">
+          <div class="sidebar-skeleton"></div>
+          <div class="sidebar-skeleton"></div>
+          <div class="sidebar-skeleton"></div>
+        </nav>
+
+        <footer class="sidebar-footer">
+          <p>4 肤色 × 4 视角</p>
+          <p>上传即代表已通过人工 Final Pass</p>
+        </footer>
+      </aside>
+
+      <main class="workspace">
+        <section class="empty-state" id="empty-state">
+          <div class="empty-orbit" aria-hidden="true"><span>16</span></div>
+          <p class="eyebrow">Ready when you are</p>
+          <h2>选择一个款式开始检查</h2>
+          <p>系统会实时读取 R2 与 D1，准确标出已有、缺失和索引异常的位置。</p>
+        </section>
+
+        <section class="style-workspace is-hidden" id="style-workspace">
+          <header class="workspace-header">
+            <div>
+              <div class="title-line">
+                <span class="style-number" id="selected-style-id">001</span>
+                <h2 id="selected-style-label">Style 001</h2>
+                <span class="status-badge" id="selected-style-status">草稿</span>
+              </div>
+              <p class="workspace-subtitle" id="selected-style-subtitle">正在读取线上状态…</p>
+            </div>
+            <div class="header-actions">
+              <button class="button button-secondary" id="edit-style-button" type="button">编辑款式信息</button>
+              <button class="button button-secondary" id="reconcile-button" type="button">修复 D1 索引</button>
+              <button class="button button-secondary" id="toggle-publish-button" type="button">发布款式</button>
+              <button class="icon-button" id="refresh-button" type="button" aria-label="刷新状态" title="刷新状态">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5m-5 4a8.1 8.1 0 0 0 15.5 2m.5 5v-5h-5" /></svg>
+              </button>
+            </div>
+          </header>
+
+          <div class="summary-grid">
+            <article class="summary-card summary-main">
+              <div class="progress-ring" id="progress-ring">
+                <span id="result-count">0</span>
+                <small>/16</small>
+              </div>
+              <div>
+                <p class="summary-label">结果图完整度</p>
+                <strong id="completion-title">尚未上传</strong>
+                <p id="missing-summary">缺少 16 个位置</p>
+              </div>
+            </article>
+            <article class="summary-card">
+              <span class="summary-icon" aria-hidden="true">◫</span>
+              <div>
+                <p class="summary-label">独立缩略图</p>
+                <strong id="thumbnail-summary">缺失</strong>
+                <p>不会由公开 API 自动缩小</p>
+              </div>
+            </article>
+            <article class="summary-card">
+              <span class="summary-icon" aria-hidden="true">✓</span>
+              <div>
+                <p class="summary-label">质量状态</p>
+                <strong>Final Pass</strong>
+                <p>上传后写入 pass / approved</p>
+              </div>
+            </article>
+          </div>
+
+          <section class="upload-intake">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Batch intake</p>
+                <h3>批量放入成品图</h3>
+              </div>
+              <div class="intake-actions">
+                <label class="button button-secondary file-button">
+                  选择图片
+                  <input id="batch-file-input" type="file" accept="image/png,image/jpeg,image/webp" multiple />
+                </label>
+                <label class="button button-secondary file-button">
+                  选择文件夹
+                  <input id="folder-file-input" type="file" accept="image/png,image/jpeg,image/webp" multiple webkitdirectory />
+                </label>
+              </div>
+            </div>
+            <div class="drop-zone" id="batch-drop-zone" tabindex="0" role="button">
+              <div class="drop-icon" aria-hidden="true">⇧</div>
+              <div>
+                <strong>拖入 1–16 张 PNG / JPEG / WebP</strong>
+                <p>识别 light-01、001-light-01 或 A1–D4；非 WebP 会在本机转码，不上传原文件。</p>
+              </div>
+            </div>
+            <div class="unmatched-panel is-hidden" id="unmatched-panel">
+              <div class="unmatched-heading">
+                <strong>需要手动指定的位置</strong>
+                <span id="unmatched-count">0</span>
+              </div>
+              <div id="unmatched-list"></div>
+            </div>
+          </section>
+
+          <section class="thumbnail-section">
+            <div class="thumbnail-copy">
+              <p class="eyebrow">Separate asset</p>
+              <h3>款式缩略图</h3>
+              <p>独立写入 <code id="thumbnail-key">tryon/icons/001-light-icon.webp</code>。可以上传人工成品，也可以从 Light / 01 生成一张小图后再提交。</p>
+              <div class="thumbnail-actions">
+                <label class="button button-secondary file-button">
+                  上传缩略图
+                  <input id="thumbnail-file-input" type="file" accept="image/png,image/jpeg,image/webp" />
+                </label>
+                <button class="button button-quiet" id="generate-thumbnail-button" type="button">从 Light / 01 生成</button>
+              </div>
+            </div>
+            <div class="thumbnail-preview" id="thumbnail-preview">
+              <div class="preview-placeholder">暂无缩略图</div>
+            </div>
+            <div class="asset-action" id="thumbnail-action"></div>
+          </section>
+
+          <section class="matrix-section">
+            <div class="section-heading matrix-heading">
+              <div>
+                <p class="eyebrow">Coverage matrix</p>
+                <h3>4 × 4 图片状态</h3>
+              </div>
+              <div class="legend" aria-label="状态图例">
+                <span><i class="legend-dot healthy"></i>线上已有</span>
+                <span><i class="legend-dot missing"></i>缺失</span>
+                <span><i class="legend-dot staged"></i>待上传</span>
+                <span><i class="legend-dot warning"></i>索引异常</span>
+              </div>
+            </div>
+            <div class="matrix-scroll">
+              <div class="matrix" id="coverage-matrix" aria-live="polite"></div>
+            </div>
+          </section>
+        </section>
+
+        <footer class="site-footer">
+          <a href="https://github.com/TurboChe91" target="_blank" rel="noopener noreferrer">PORTFOLIO PROJECT BY TURBOCHE91</a>
+        </footer>
+      </main>
+    </div>
+
+    <div class="batch-bar is-hidden" id="batch-bar">
+      <div>
+        <strong id="batch-count">0 张待处理</strong>
+        <span id="batch-description">已有位置默认跳过</span>
+      </div>
+      <div class="batch-progress is-hidden" id="batch-progress"><span id="batch-progress-fill"></span></div>
+      <button class="button button-quiet" id="clear-stage-button" type="button">清空</button>
+      <button class="button button-primary" id="start-upload-button" type="button">开始差异上传</button>
+    </div>
+
+    <dialog class="modal" id="new-style-dialog">
+      <form method="dialog" id="new-style-form">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">New collection entry</p>
+            <h2>新建款式</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="关闭" type="submit" formnovalidate>×</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            <span>款式编号 <em>必填</em></span>
+            <input name="id" inputmode="numeric" pattern="[0-9]{3}" maxlength="3" placeholder="021" required />
+            <small>固定 3 位数字，创建后不可修改</small>
+          </label>
+          <label>
+            <span>款式名称 <em>必填</em></span>
+            <input name="label" maxlength="120" placeholder="Style 021" required />
+          </label>
+          <label>
+            <span>分类</span>
+            <input name="category" maxlength="120" value="Try-On" />
+          </label>
+          <label>
+            <span>Shopify 产品 Handle</span>
+            <input name="shopifyProductHandle" maxlength="255" placeholder="可稍后补充" />
+          </label>
+          <label class="form-wide">
+            <span>Shopify Variant ID</span>
+            <input name="shopifyVariantId" maxlength="255" placeholder="可稍后补充" />
+          </label>
+          <label class="form-wide">
+            <span>说明</span>
+            <textarea name="description" maxlength="2000" rows="3" placeholder="内部备注或款式说明"></textarea>
+          </label>
+        </div>
+        <div class="modal-note">新款式会以“草稿”创建。16 张结果图和缩略图完整后才能发布。</div>
+        <div class="modal-actions">
+          <button class="button button-quiet" value="cancel" type="submit" formnovalidate>取消</button>
+          <button class="button button-primary" id="create-style-submit" value="default" type="submit">创建款式</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="edit-style-dialog">
+      <form method="dialog" id="edit-style-form">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">Style metadata</p>
+            <h2>编辑款式信息</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="关闭" type="submit" formnovalidate>×</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            <span>款式编号</span>
+            <input id="edit-style-id" inputmode="numeric" readonly />
+            <small>款式编号创建后不可修改</small>
+          </label>
+          <label>
+            <span>款式名称 <em>必填</em></span>
+            <input id="edit-style-label" name="label" maxlength="120" required />
+          </label>
+          <label>
+            <span>分类</span>
+            <input id="edit-style-category" name="category" maxlength="120" />
+          </label>
+          <label>
+            <span>Shopify 产品 Handle</span>
+            <input id="edit-style-product-handle" name="shopifyProductHandle" maxlength="255" placeholder="例如 press-on-nails-001" />
+          </label>
+          <label class="form-wide">
+            <span>Shopify Variant ID</span>
+            <input id="edit-style-variant-id" name="shopifyVariantId" maxlength="255" placeholder="例如 1234567890" />
+          </label>
+          <label class="form-wide">
+            <span>说明</span>
+            <textarea id="edit-style-description" name="description" maxlength="2000" rows="3" placeholder="内部备注或款式说明"></textarea>
+          </label>
+        </div>
+        <div class="modal-note">留空并保存会清除对应的 Shopify 字段。修改款式信息不会改变当前的草稿或发布状态。</div>
+        <div class="modal-actions">
+          <button class="button button-quiet" value="cancel" type="submit" formnovalidate>取消</button>
+          <button class="button button-primary" id="edit-style-submit" value="default" type="submit">保存修改</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal confirm-modal" id="overwrite-dialog">
+      <form method="dialog">
+        <div class="confirm-symbol" aria-hidden="true">!</div>
+        <p class="eyebrow">Destructive update</p>
+        <h2>确认覆盖线上图片</h2>
+        <p>以下位置会直接替换 R2 中的现有成品图，不保留归档。系统会用最新 ETag 防止误覆盖他人的新版本。</p>
+        <div class="overwrite-list" id="overwrite-list"></div>
+        <div class="modal-actions">
+          <button class="button button-quiet" value="cancel">返回检查</button>
+          <button class="button button-danger" id="confirm-overwrite-button" value="confirm">确认覆盖</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="true"></div>
+  </body>
+</html>
