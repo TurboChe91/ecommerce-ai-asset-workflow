@@ -31,19 +31,18 @@ flowchart TD
     B --> C[Batch upload]
     C --> D[Completeness check]
     D --> E[Prepare for publishing]
-    E -.-> F[Platform API / RPA: next step]
+    E -.-> F[Publishing Adapter: next step]
 ```
 
-Human review happens before upload. The application records approval when an image is saved; it does not perform a second visual review. The publish button currently changes an internal status, with storefront publishing still to be connected.
+The application handles asset intake, coverage checks, QA records, operational state, and release readiness. Images pass human final review before upload, and approval is recorded when they are saved. The publish button changes an internal release/readiness state; it does not publish to Shopify or another external platform. Actual publishing belongs to a future downstream integration and adapter layer.
 
 For example, if style 001 has only Light/01, the screen shows 1/16 images. Adding a full batch skips that existing slot by default. To replace it, the operator selects overwrite and confirms the change.
 
 ## Interface
 
-A screenshot of the actual Upload Studio will be added after removing private details. The most useful view would show the style list, image matrix, and pending upload counts.
+The actual Upload Studio with private details removed: the style list, 1/16 image coverage, a separate thumbnail, and the image status matrix.
 
-<!-- Once docs/images/dashboard.png is added, uncomment the next line. -->
-<!-- ![Upload Studio: style list, image matrix, and differential uploads](./docs/images/dashboard.png) -->
+![Upload Studio: style list, coverage checks, and image status matrix](./docs/images/dashboard.png)
 
 ## How it is built
 
@@ -53,15 +52,11 @@ A screenshot of the actual Upload Studio will be added after removing private de
 - TypeScript: backend logic
 - Plain HTML, CSS, and JavaScript: frontend and browser image processing
 
-R2 holds the image files. D1 records which style, tone, and view each image belongs to, along with its QA and publishing status. This makes it possible to look up a SKU's assets without checking folders manually.
+## Why assets and business state are stored separately
 
-A database record does not guarantee that its image still exists, and an image upload can succeed while the database write fails. The interface checks both stores, flags mismatches, and provides an action to rebuild missing indexes.
+R2 stores binary image files. D1 stores the SKU, tone/view slot, QA status, and release state. The file tells us where an image is; the database tells us where it belongs, whether it has passed human review, and the style's current status. These records can be queried and updated without processing the image again.
 
-## One design choice I care about
-
-RPA should not own business status. If I add a tool such as Yingdao, I would keep decisions about completeness, review approval, publishing eligibility, and execution failures in this application. RPA would handle the actual admin actions: opening a product editor, selecting files, and submitting changes.
-
-Where a platform provides a stable API, I would use it first. RPA would cover platforms without an API or older systems. Either way, execution results should come back to this application so status is not scattered across scripts and logs.
+The two stores can disagree: an upload may succeed while its index write fails, or a database record may remain after its file is gone. Readiness therefore cannot depend on file existence alone. The application checks both R2 objects and D1 indexes, flags mismatches, and can rebuild missing indexes. Moving a draft to published requires all 16 images, the thumbnail, and their indexes. QA approval comes from human review before upload and is recorded on save.
 
 ## Run locally
 
@@ -83,9 +78,9 @@ npm run check
 
 These features are future work:
 
-- Publishing through the Shopify API
-- An RPA publishing adapter
+- A Shopify / commerce platform publishing adapter
 - A publishing queue with retries
+- Webhook / ERP / downstream system integration
 - More complete review and permission records
 
 ## About this version

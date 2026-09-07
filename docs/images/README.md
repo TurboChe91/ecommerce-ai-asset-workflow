@@ -1,3 +1,3 @@
 # Screenshots
 
-Production screenshots are intentionally excluded because they contain real product assets and operational metadata. Public-safe screenshots can be added after a dedicated demo dataset is available.
+`dashboard.png` is a screenshot of the actual Upload Studio, supplied by the project author with private details removed. Both project READMEs use this image.
