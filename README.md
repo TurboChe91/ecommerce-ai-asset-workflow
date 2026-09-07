@@ -1,280 +1,93 @@
 # AI Commerce Asset Ops
 
-> AI-generated e-commerce asset intake, QA, state tracking and publishing workflow.
+用于管理 AI 商品素材上传、完整性检查、QA 和发布状态的电商内部工具。
 
-AI Commerce Asset Ops is a portfolio-ready reference implementation of an internal operations tool for teams that prepare AI-generated product imagery for e-commerce. It turns a folder of human-approved images into a controlled, observable asset workflow: validate the expected coverage, upload only what changed, guard overwrites, reconcile object storage with metadata, and mark a style ready for downstream publishing.
+[English](./README_EN.md)
 
-中文简介：这是一个面向电商团队的 AI 图片资产运营工具原型，用于接收人工终审后的图片、检查素材完整度、差异化上传、记录状态，并为后续商城发布做好准备。
+## 为什么做这个
 
-## Overview
+这个项目来自一次跨境电商虚拟试戴项目。
 
-Generative image pipelines can produce many product variants quickly, but the operational work after generation is easy to underestimate. A single style may need multiple skin tones, camera views, a thumbnail, consistent naming, review evidence, safe replacement behavior, and a reliable answer to a simple question: **is this style actually ready?**
+前面的 AI 生成流程跑起来以后，我发现真正麻烦的不只是“把图生成出来”。一个 SKU 会对应多张不同肤色、视角的结果图，人工通过文件夹管理时，很容易少图、放错位置、不清楚哪些已通过审核，或者把已经上传的图片再传一遍。到了发布前，还要重新打开文件夹逐张核对。
 
-This project models that last-mile workflow for a fixed 4 × 4 image matrix:
+所以我做了这个内部工具原型，把生成后的素材管理、QA 记录和发布准备集中起来。打开一个款式，就能看到已有多少张图、缺哪些位置，以及这次上传会新增、跳过还是覆盖哪些图片。
 
-- four skin tones: `light`, `medium`, `tan`, and `deep`;
-- four views: `01` through `04`;
-- sixteen final-pass result images per style;
-- one independently stored thumbnail per style.
+## 它现在能做什么
 
-The current application is a Cloudflare Worker serving a browser-based internal console. R2 stores image objects, D1 stores operational metadata and audit events, and Cloudflare Access protects the API in deployed environments.
+- 按三位数款式编号管理 SKU，创建和编辑名称、备注，以及可后补的 Shopify Variant ID。
+- 用 4 种肤色 × 4 个视角的矩阵展示 16 张结果图，标出缺失图片和索引异常。
+- 批量选择文件或文件夹，按文件名匹配位置；无法识别的文件可以手动指定。
+- 差异上传，已有图片默认跳过；覆盖需要确认，并检查图片版本，防止覆盖别人刚更新的内容。
+- 接收人工 Final Pass 后的图片，上传时记录 QA 通过状态、操作人和上传结果。
+- 在浏览器中将 PNG/JPEG 转成 WebP；缩略图可以单独上传，也可以从 Light/01 生成后预览提交。
+- 将图片存到 R2、索引和状态存到 D1，并根据已有图片补齐缺失的数据库索引。
+- 管理草稿和发布状态；切换到发布前，检查 16 张结果图、缩略图及对应索引是否齐全。
 
-## The Problem
-
-Asset operations teams need more than a bulk upload button:
-
-- incomplete image sets must be visible before release;
-- existing assets should not be uploaded again by accident;
-- deliberate replacements need an explicit confirmation and concurrency protection;
-- storage objects and database records can drift and need reconciliation;
-- product identifiers may arrive later and still need to be editable;
-- readiness must be based on verifiable coverage, not an operator's memory.
-
-## The Solution
-
-AI Commerce Asset Ops provides a compact control plane around final, human-reviewed e-commerce imagery. Operators select or create a three-digit style, inspect its coverage matrix, add a batch of files, review the proposed create/skip/overwrite plan, and upload. The Worker validates every write, stores the WebP object in R2, records metadata and audit events in D1, and exposes a status endpoint that compares both systems.
-
-```mermaid
-flowchart LR
-    Operator[Operations user] --> UI[Browser console]
-    UI -->|Cloudflare Access JWT| Worker[Cloudflare Worker API]
-    Worker -->|image objects + ETags| R2[(Cloudflare R2)]
-    Worker -->|styles, asset state, sessions, events| D1[(Cloudflare D1)]
-    Worker --> Assets[Worker static assets]
-    D1 -. readiness metadata .-> Adapter[Planned commerce adapter]
-    Adapter -. future sync .-> Storefront[Shopify or another storefront]
-```
-
-The dotted path is deliberately marked as planned: this repository does **not** call the Shopify Admin API or publish assets to a live storefront.
-
-## Current Capability
-
-Implemented in this repository:
-
-- internal responsive web console served by a Cloudflare Worker;
-- create and edit three-digit style/SKU records, including an optional commerce variant ID;
-- real-time 4-tone × 4-view coverage inspection;
-- batch intake with filename parsing and cell assignment;
-- browser-side PNG/JPEG/WebP validation and WebP conversion;
-- missing-asset detection and differential upload planning;
-- skip existing assets by default;
-- explicit overwrite confirmation and `If-Match`/ETag concurrency checks;
-- independent thumbnail upload, with an option to derive it locally from `light/01`;
-- R2 object storage plus D1 metadata, upload sessions, and event history;
-- R2/D1 drift detection and one-click metadata reconciliation;
-- publish-readiness gate requiring all 16 result images and a healthy thumbnail;
-- Cloudflare Access JWT verification in deployed environments;
-- integration tests covering authentication, status, upload, overwrite conflict, repair, and publish gating.
-
-Planned, but not represented as complete:
-
-- generation of AI images inside the application;
-- automated visual-quality scoring or model-based moderation;
-- Shopify Admin API discovery, variant synchronization, or storefront publishing;
-- background queues, retry orchestration, and webhook processing;
-- robotic process automation for systems without an API;
-- granular role-based authorization beyond the Cloudflare Access policy.
-
-## Core Features
-
-### Coverage as an operational state
-
-Each style has 16 required result slots. The UI renders each slot as missing, healthy, unindexed, or orphaned by comparing the object in R2 with its D1 record. A thumbnail is checked separately because it is a distinct deliverable, not merely a display transformation.
-
-### Differential uploads
-
-The browser builds an upload plan before changing storage:
-
-- **create** when a required object does not exist;
-- **skip** when the object already exists and replacement was not requested;
-- **overwrite** only after the operator chooses replacement and confirms the action.
-
-For overwrites, the client sends the previously observed ETag. The Worker uses conditional R2 writes so a stale screen cannot silently replace a newer object.
-
-### Human-reviewed input
-
-This application starts after image generation and human final pass. Successful uploads are recorded as `qa_status = pass` and `visual_status = approved`. It does not claim to perform the creative review itself.
-
-### Auditability and repair
-
-Upload sessions capture intended and completed create/overwrite counts. Individual events retain actor, style, slot, object key, prior/new ETag, dimensions, size, status, and failure detail. A reconciliation endpoint can rebuild missing D1 metadata from the current R2 objects without re-uploading images.
-
-## Why R2 + D1
-
-R2 and D1 solve different parts of the workflow:
-
-| Concern | Service | Reason |
-| --- | --- | --- |
-| Binary image storage | Cloudflare R2 | Object semantics, metadata, ETags, conditional writes, and no database blob overhead |
-| Operational state | Cloudflare D1 | Queryable style records, coverage metadata, upload sessions, audit history, and release status |
-| API and UI delivery | Cloudflare Workers | One deployment surface close to storage, with static assets and Access-aware request handling |
-
-Keeping objects and metadata separate creates a consistency problem by design; the status and repair flows make that problem observable and recoverable.
-
-## Workflow
+## 使用流程
 
 ```mermaid
 flowchart TD
-    A[Select or create style] --> B[Load R2 + D1 status]
-    B --> C[See 16-slot coverage and thumbnail state]
-    C --> D[Choose files or drop a batch]
-    D --> E[Parse names, validate images, convert to WebP]
-    E --> F{Target already exists?}
-    F -->|No| G[Plan create]
-    F -->|Yes, replacement off| H[Plan skip]
-    F -->|Yes, replacement on| I[Request explicit confirmation]
-    I --> J[Conditional overwrite with observed ETag]
-    G --> K[Upload to R2]
-    J --> K
-    K --> L[Write D1 metadata and audit event]
-    H --> M[Complete upload session]
-    L --> M
-    M --> N[Refresh and reconcile status]
-    N --> O{16 images + thumbnail healthy?}
-    O -->|No| C
-    O -->|Yes| P[Allow D1 status to become published]
+    A[商品素材] --> B[人工 QA / Final Pass]
+    B --> C[批量上传]
+    C --> D[完整性检查]
+    D --> E[发布准备]
+    E -.-> F[平台 API / RPA：下一步]
 ```
 
-In the current implementation, “published” is an internal D1 readiness status. It is not evidence that a product or image has been published to an external commerce platform.
+当前上传的都是人工终审后的图片，系统在入库时记录审核通过，不会在上传后再做一次视觉审核。界面里的“发布”目前更新内部状态，后续再对接商城发布。
 
-## Automation Design
+例如，款式 001 已有 Light/01，其余 15 张缺失，页面会显示 1/16。放入整组图片后，已有位置默认跳过；需要换图时，再单独选择覆盖并确认。
 
-The implementation emphasizes deterministic operations before autonomous automation:
+## 界面
 
-1. **Discover** — read style metadata and compare expected keys with R2 and D1.
-2. **Plan** — classify each selected asset as create, skip, or overwrite.
-3. **Confirm** — require a human decision for destructive replacement.
-4. **Execute** — use bounded WebP uploads and conditional writes.
-5. **Record** — persist session totals and per-object audit events.
-6. **Verify** — reload state from storage and gate release on complete coverage.
-7. **Extend** — attach a queue or commerce adapter later without weakening the upload contract.
+待补充脱敏后的 Upload Studio 实际截图，建议展示款式列表、图片矩阵和待上传统计。
 
-This shape supports future event-driven automation while keeping the existing workflow inspectable and safe.
+<!-- 添加 docs/images/dashboard.png 后，取消下一行的注释。 -->
+<!-- ![Upload Studio：款式列表、图片矩阵和差异上传](./docs/images/dashboard.png) -->
 
-## Engineering Decisions
+## 技术实现
 
-- **Fixed naming contract:** result objects use `tryon/results/{style}-{tone}-{view}.webp`; thumbnails use `tryon/icons/{style}-light-icon.webp`.
-- **Server-side validation:** style, tone, view, MIME type, content length, image signature, dimensions, upload session, and overwrite preconditions are validated by the Worker.
-- **Bounded uploads:** the sample limit is 12 MiB per source image; request bodies are not accepted without a known, valid content length.
-- **Optimistic concurrency:** overwrite operations require the current ETag and fail with a conflict if the object changed.
-- **Independent thumbnail lifecycle:** the thumbnail is uploaded and tracked as its own object. The UI may generate a candidate from `light/01`, but the server does not silently resize images.
-- **Readiness over side effects:** release status is gated locally; external publishing remains an explicit adapter boundary.
-- **Zero-trust deployment:** production requests are expected to arrive through Cloudflare Access and are verified against the configured audience.
-- **Public-safe defaults:** deployment identifiers are placeholders, development auth is local-only, and production configuration checks block accidental deployment with example values.
+- Cloudflare Workers：API 和应用服务
+- Cloudflare R2：图片文件
+- Cloudflare D1：SKU、图片索引、QA 和发布状态、上传记录
+- TypeScript：后端逻辑
+- 原生 HTML、CSS、JavaScript：前端界面和浏览器图片处理
 
-## Screenshots
+图片文件比较大，适合直接放在 R2。D1 保存图片属于哪个款式、对应哪个肤色和视角，以及审核和发布状态。这样，查一个 SKU 的素材情况时，可以直接查记录，不用人工翻文件夹。
 
-Screenshots are intentionally omitted from this public repository. The original operational interface contained customer-specific records, deployment identifiers, and commercial imagery. Publishing fabricated screenshots would misrepresent the project, while publishing real screens would risk private data. A future public demo can add screenshots after a clearly labeled, synthetic demo dataset and deployment are available.
+但数据库有记录，不代表图片一定还在；图片上传成功，索引也可能写入失败。因此页面会同时核对 R2 文件和 D1 记录，提示不一致的位置，并提供补齐索引的操作。
 
-See [`docs/images/README.md`](docs/images/README.md) for the screenshot policy.
+## 一个我比较关注的设计点
 
-## Tech Stack
+RPA 不应该负责业务状态。如果后续接影刀等 RPA，我会让当前系统继续负责判断哪些素材完整、哪些通过审核、哪些可以发布，以及哪些执行失败。RPA 只负责具体的后台操作，例如打开商品编辑页、选择文件和提交。
 
-- TypeScript
-- Cloudflare Workers and Workers Static Assets
-- Cloudflare R2
-- Cloudflare D1
-- Cloudflare Access JWT validation with `jose`
-- Vanilla HTML, CSS, and JavaScript
-- Vitest with `@cloudflare/vitest-pool-workers`
-- Wrangler
-- GitHub Actions
+有稳定 API 的平台优先接 API，没有 API 或旧系统再使用 RPA。无论用哪种方式，执行结果都要回写系统，避免状态散落在脚本和操作日志里。
 
-## Local Development
+## 本地运行
 
-Prerequisites:
-
-- Node.js 22 or newer
-- npm
-- a Cloudflare account only when testing remote resources or deploying
-
-Install dependencies:
+需要 Node.js 22 或更新版本。在仓库目录执行：
 
 ```bash
 npm ci
-```
-
-Create local development variables. On macOS/Linux:
-
-```bash
-cp .dev.vars.example .dev.vars
-```
-
-On PowerShell:
-
-```powershell
-Copy-Item .dev.vars.example .dev.vars
-```
-
-Apply the D1 schema to the local Wrangler database:
-
-```bash
 npx wrangler d1 migrations apply asset-ops-db --local
-```
-
-Start the Worker:
-
-```bash
 npm run dev
 ```
 
-The development script supplies a local-only operator identity. Deployed requests do not use that fallback and must pass Cloudflare Access verification.
-
-Run the full verification suite:
+开发命令已配置本地测试身份，图片和数据库使用 Wrangler 本地存储。检查类型、前端语法和集成测试：
 
 ```bash
 npm run check
 ```
 
-This checks browser JavaScript syntax, TypeScript, integration tests, and generated Worker binding types.
+## 下一步
 
-### Deployment setup
+以下功能尚待实现：
 
-Before deployment:
+- Shopify API 发布
+- RPA 发布适配
+- 发布任务队列和失败重试
+- 更完整的审核与权限记录
 
-1. Create an R2 bucket and D1 database.
-2. Replace the example bucket/database names and D1 UUID in `wrangler.jsonc`.
-3. Create a Cloudflare Access self-hosted application for the Worker.
-4. Replace `TEAM_DOMAIN` and `POLICY_AUD` with the Access team domain and application audience.
-5. Apply D1 migrations to the remote database.
-6. Run `npm run deploy`.
+## 项目说明
 
-The `predeploy` script blocks known placeholder configuration and runs the complete check suite.
-
-## Repository Structure
-
-```text
-.
-├── .github/workflows/ci.yml     # Continuous verification
-├── docs/images/                 # Public screenshot policy/placeholders
-├── migrations/                  # D1 schema and audit tables
-├── public/                      # Internal operations console
-├── scripts/                     # Deployment safety checks
-├── src/index.ts                 # Worker API, auth, R2/D1 coordination
-├── test/index.spec.ts           # Worker integration tests
-├── wrangler.jsonc               # Public-safe Cloudflare configuration
-└── package.json                 # Development and verification commands
-```
-
-## Future Work
-
-- introduce a commerce adapter with Shopify product/variant discovery;
-- queue publish jobs and add retry/dead-letter handling;
-- add webhook-driven reconciliation with downstream systems;
-- model review checkpoints separately from upload completion;
-- add per-role permissions and approval policies;
-- expose asset history and rollback controls in the UI;
-- add a public-safe demo dataset and truthful screenshots;
-- add automated accessibility and end-to-end browser tests.
-
-## Background
-
-This repository is a sanitized portfolio extraction from a private, real-world operations prototype. Customer names, production domains, account identifiers, commercial images, private email addresses, deployment bindings, logs, and unrelated source history have been excluded. The implementation has been reframed around the reusable engineering problem: safely moving human-approved AI commerce assets from final pass to a verifiable publishing-ready state.
-
-## Disclaimer
-
-This is a sanitized portfolio project reconstructed from a real-world workflow. All customer-specific data, credentials and private business information have been removed.
-
-## License
-
-[MIT](LICENSE)
+这是从真实业务问题中抽离出的公开展示版本，仓库不包含客户数据、生产凭证和商业素材。
